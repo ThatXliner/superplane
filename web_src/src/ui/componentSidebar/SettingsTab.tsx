@@ -113,6 +113,7 @@ export function SettingsTab({
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveBaselineSnapshotRef = useRef(buildAutosaveSnapshot(configuration || {}, nodeName, integrationRef));
   const pendingAutosaveSnapshotRef = useRef<string | null>(null);
+  const lastSyncedPropsRef = useRef<string | null>(null);
   // Use autocompleteExampleObj directly - current node is already filtered out
   const resolvedAutocompleteExampleObj = autocompleteExampleObj;
 
@@ -242,6 +243,15 @@ export function SettingsTab({
 
   // Sync state when props change
   useEffect(() => {
+    // Only resync from props when the node's own props actually change. Derived
+    // schema (configurationFields → defaultValuesWithoutToggles) also changes on a
+    // Planelet manifest refresh; without this guard that would wipe unsaved edits.
+    const propsSignature = buildAutosaveSnapshot(configuration, nodeName, integrationRef);
+    if (lastSyncedPropsRef.current === propsSignature) {
+      return;
+    }
+    lastSyncedPropsRef.current = propsSignature;
+
     let newConfig;
     if (Object.values(configuration).length === 0 || !configuration) {
       newConfig = defaultValuesWithoutToggles;
