@@ -23,6 +23,7 @@ import {
 import { useRealtimeValidation } from "@/hooks/useRealtimeValidation";
 import { useRefreshIntegration } from "@/hooks/useIntegrations";
 import { RefreshCw } from "lucide-react";
+import { showErrorToast, showSuccessToast } from "@/lib/toast";
 import { SimpleTooltip } from "./SimpleTooltip";
 
 interface SettingsTabProps {
@@ -721,7 +722,13 @@ export function SettingsTab({
                   type="button"
                   disabled={refreshIntegration.isPending || isReadOnly}
                   onClick={() =>
-                    refreshIntegration.mutate({ integrationId: selectedIntegration.id!, force: true })
+                    refreshIntegration.mutate(
+                      { integrationId: selectedIntegration.id!, force: true },
+                      {
+                        onSuccess: () => showSuccessToast("Reloaded actions from Planelet server"),
+                        onError: () => showErrorToast("Failed to reload actions. Check the Planelet server."),
+                      },
+                    )
                   }
                 >
                   <RefreshCw className={`h-4 w-4 ${refreshIntegration.isPending ? "animate-spin" : ""}`} />
