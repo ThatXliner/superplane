@@ -6,6 +6,7 @@ import {
   organizationsListIntegrationResources,
   organizationsCreateIntegration,
   organizationsUpdateIntegration,
+  organizationsRefreshIntegration,
   organizationsDeleteIntegration,
   organizationsNextIntegrationSetupStep,
   organizationsPreviousIntegrationSetupStep,
@@ -43,6 +44,22 @@ export const integrationKeys = {
         .join("&"),
     ] as const,
 };
+
+// Planelet manifests rarely change mid-session, so the automatic refresh
+// (on action-picker open) is skipped when the manifest was refreshed within
+// this window. The manual reload button bypasses it with force.
+export const MANIFEST_STALE_MS = 5 * 60 * 1000;
+
+const lastManifestRefreshAt = new Map<string, number>();
+
+function manifestKey(organizationId: string, integrationId: string): string {
+  return `${organizationId}:${integrationId}`;
+}
+
+export function manifestIsFresh(organizationId: string, integrationId: string, now: number): boolean {
+  const at = lastManifestRefreshAt.get(manifestKey(organizationId, integrationId));
+  return at !== undefined && now - at < MANIFEST_STALE_MS;
+}
 
 // Hook to fetch available integrations (catalog).
 // Normalizes each integration's label (e.g. "github" -> "GitHub") so consumers get correct display names.
@@ -243,6 +260,44 @@ export const useUpdateIntegration = (organizationId: string, integrationId: stri
       });
       queryClient.invalidateQueries({
         queryKey: integrationKeys.integration(organizationId, integrationId),
+      });
+    },
+  });
+};
+
+// Refreshes a Planelet integration's manifest. force=true (the manual reload
+// button) always calls the server; force=false (automatic, on action-picker
+// open) no-ops when the manifest is still fresh.
+export const useRefreshIntegration = (organizationId: string) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: { integrationId: string; force?: boolean; now?: number }) => {
+      const now = data.now ?? performance.now();
+      if (!data.force && manifestIsFresh(organizationId, data.integrationId, now)) {
+        return null;
+      }
+
+      const response = await organizationsRefreshIntegration(
+        withOrganizationHeader({
+          path: { id: organizationId, integrationId: data.integrationId },
+          body: {},
+        }),
+      );
+
+      lastManifestRefreshAt.set(manifestKey(organizationId, data.integrationId), now);
+      return response;
+    },
+    onSuccess: (response, variables) => {
+      if (response === null) {
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: integrationKeys.available() });
+      queryClient.invalidateQueries({
+        queryKey: integrationKeys.integration(organizationId, variables.integrationId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: [...integrationKeys.integration(organizationId, variables.integrationId), "resources"],
       });
     },
   });
