@@ -273,7 +273,7 @@ export const useRefreshIntegration = (organizationId: string) => {
 
   return useMutation({
     mutationFn: async (data: { integrationId: string; force?: boolean; now?: number }) => {
-      const now = data.now ?? performance.now();
+      const now = data.now ?? Date.now();
       if (!data.force && manifestIsFresh(organizationId, data.integrationId, now)) {
         return null;
       }
