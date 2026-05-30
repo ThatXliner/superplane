@@ -17,6 +17,10 @@ var ExpressionPlaceholderRegex = regexp.MustCompile(`(?s)\{\{.*?\}\}`)
 
 func ValidateConfiguration(fields []Field, config map[string]any) error {
 	for _, field := range fields {
+		if !isVisible(field, config) {
+			continue
+		}
+
 		value, exists := config[field.Name]
 
 		// Check if field is required (either always or conditionally)
@@ -725,6 +729,25 @@ func validateFieldValue(field Field, value any) error {
 	}
 
 	return nil
+}
+
+func isVisible(field Field, config map[string]any) bool {
+	if len(field.VisibilityConditions) == 0 {
+		return true
+	}
+
+	for _, condition := range field.VisibilityConditions {
+		conditionValue, exists := config[condition.Field]
+		if !exists {
+			return false
+		}
+
+		if !slices.Contains(condition.Values, fmt.Sprintf("%v", conditionValue)) {
+			return false
+		}
+	}
+
+	return true
 }
 
 func isRequiredByCondition(field Field, config map[string]any) bool {
