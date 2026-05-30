@@ -257,7 +257,11 @@ export function SettingsTab({
     setSelectedIntegration(integrationRef);
     setValidationErrors(new Set());
     setShowValidation(false);
-  }, [configuration, nodeName, defaultValuesWithoutToggles, filterVisibleFields, integrationRef]);
+    // filterVisibleFields intentionally omitted: it changes when configurationFields
+    // changes (e.g. a Planelet manifest refresh), and we must NOT reset in-progress
+    // edits from props on a schema-only change — only on real config/name/instance changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configuration, nodeName, defaultValuesWithoutToggles, integrationRef]);
 
   // Auto-select the first installation if none is selected or selection is invalid
   useEffect(() => {
