@@ -76,8 +76,10 @@ Mirrors `list_integration_resources.go` for context construction.
 
 1. Parse + validate `org` and `integration_id` UUIDs.
 2. `models.FindIntegration(org, id)`. `NotFound` → `codes.NotFound`.
-3. If `instance.State != IntegrationStateReady` → `codes.FailedPrecondition`
-   ("integration is not ready").
+3. If `instance.State` is `pending` → `codes.FailedPrecondition`
+   ("integration is not ready"). `ready` and `error` are both allowed:
+   refreshing from `error` is the recovery path — a failed refresh leaves the
+   instance in `error`, and a successful refresh restores it to `ready`.
 4. If `instance.AppName != "planelet"` → `codes.FailedPrecondition`
    ("only Planelet integrations can be refreshed"). Honest scope — no
    pretending other integrations have a manifest.
@@ -89,7 +91,8 @@ Mirrors `list_integration_resources.go` for context construction.
    same in-memory cache that `Configuration()` reads for the catalog.
 7. On Sync error: set `instance.State = error`, save, return
    `codes.FailedPrecondition` with the message.
-8. On success: save instance, re-describe it, return in
+8. On success: set `instance.State = ready` (restores recovery), clear
+   `StateDescription`, save, re-describe it, return in
    `RefreshIntegrationResponse`.
 
 ### Service wiring
