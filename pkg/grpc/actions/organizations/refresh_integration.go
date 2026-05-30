@@ -55,7 +55,10 @@ func RefreshIntegration(
 		return nil, status.Error(codes.FailedPrecondition, "only Planelet integrations can be refreshed")
 	}
 
-	if instance.State != models.IntegrationStateReady {
+	// A refresh is allowed when the integration is ready, or when a previous
+	// refresh left it in the error state (the recovery path). A pending
+	// integration has never been successfully set up, so it cannot be refreshed.
+	if instance.State != models.IntegrationStateReady && instance.State != models.IntegrationStateError {
 		return nil, status.Error(codes.FailedPrecondition, "integration is not ready")
 	}
 
@@ -86,6 +89,7 @@ func RefreshIntegration(
 		return nil, status.Errorf(codes.FailedPrecondition, "failed to refresh integration: %v", syncErr)
 	}
 
+	instance.State = models.IntegrationStateReady
 	instance.StateDescription = ""
 	if err := database.Conn().Save(instance).Error; err != nil {
 		return nil, status.Error(codes.Internal, "failed to save integration after refresh")

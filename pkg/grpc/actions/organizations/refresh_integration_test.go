@@ -116,4 +116,33 @@ func Test__RefreshIntegration(t *testing.T) {
 		require.NoError(t, ferr)
 		assert.Equal(t, models.IntegrationStateError, reloaded.State)
 	})
+
+	t.Run("recovers to ready after a failed refresh then a successful one", func(t *testing.T) {
+		r.Registry.Integrations["planelet"] = impl.NewDummyIntegration(impl.DummyIntegrationOptions{
+			OnSync: func(ctx core.SyncContext) error { return errors.New("boom") },
+		})
+		integration, err := models.CreateIntegration(
+			uuid.New(), r.Organization.ID, "planelet",
+			support.RandomName("integration"), map[string]any{},
+		)
+		require.NoError(t, err)
+		require.NoError(t, database.Conn().Model(integration).Update("state", models.IntegrationStateReady).Error)
+
+		_, err = RefreshIntegration(context.Background(), r.Registry, nil, "", "",
+			r.Organization.ID.String(), integration.ID.String())
+		require.Error(t, err)
+		errored, ferr := models.FindIntegration(r.Organization.ID, integration.ID)
+		require.NoError(t, ferr)
+		require.Equal(t, models.IntegrationStateError, errored.State)
+
+		r.Registry.Integrations["planelet"] = impl.NewDummyIntegration(impl.DummyIntegrationOptions{
+			OnSync: func(ctx core.SyncContext) error { return nil },
+		})
+		_, err = RefreshIntegration(context.Background(), r.Registry, nil, "", "",
+			r.Organization.ID.String(), integration.ID.String())
+		require.NoError(t, err)
+		recovered, ferr := models.FindIntegration(r.Organization.ID, integration.ID)
+		require.NoError(t, ferr)
+		assert.Equal(t, models.IntegrationStateReady, recovered.State)
+	})
 }
