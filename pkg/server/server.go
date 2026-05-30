@@ -14,11 +14,14 @@ import (
 	"github.com/superplanehq/superplane/pkg/authorization"
 	"github.com/superplanehq/superplane/pkg/config"
 	"github.com/superplanehq/superplane/pkg/crypto"
+	"github.com/superplanehq/superplane/pkg/database"
 	"github.com/superplanehq/superplane/pkg/git"
 	gitprovider "github.com/superplanehq/superplane/pkg/git/provider"
 	grpc "github.com/superplanehq/superplane/pkg/grpc"
 	agentsActions "github.com/superplanehq/superplane/pkg/grpc/actions/agents"
+	"github.com/superplanehq/superplane/pkg/integrations/planelet"
 	"github.com/superplanehq/superplane/pkg/jwt"
+	"github.com/superplanehq/superplane/pkg/models"
 	"github.com/superplanehq/superplane/pkg/networkpolicy"
 	"github.com/superplanehq/superplane/pkg/oidc"
 	"github.com/superplanehq/superplane/pkg/public"
@@ -29,6 +32,7 @@ import (
 	"github.com/superplanehq/superplane/pkg/templates"
 	"github.com/superplanehq/superplane/pkg/usage"
 	"github.com/superplanehq/superplane/pkg/workers"
+	"github.com/superplanehq/superplane/pkg/workers/contexts"
 	"gorm.io/gorm"
 )
 
@@ -278,6 +282,8 @@ func startInternalAPI(
 ) {
 	log.Println("Starting Internal API")
 
+	warmPlaneletCaches(registry, encryptor)
+
 	grpc.RunServer(
 		baseURL,
 		webhooksBaseURL,
@@ -291,6 +297,29 @@ func startInternalAPI(
 		agentService,
 		lookupInternalAPIPort(),
 	)
+}
+
+// warmPlaneletCaches re-fetches the manifest for every ready Planelet instance
+// so the integration catalog exposes action parameters immediately after a
+// restart, instead of only once the user opens an action picker. Failures are
+// logged and skipped — a single unreachable Planelet server must not block the
+// internal API from starting.
+func warmPlaneletCaches(reg *registry.Registry, encryptor crypto.Encryptor) {
+	instances, err := models.ListReadyIntegrationsByAppName("planelet")
+	if err != nil {
+		log.Warnf("failed to list Planelet integrations for cache warming: %v", err)
+		return
+	}
+
+	for i := range instances {
+		instance := &instances[i]
+		integrationCtx := contexts.NewIntegrationContext(database.Conn(), nil, instance, encryptor, reg, nil)
+		if err := planelet.WarmCache(integrationCtx, reg.HTTPContext()); err != nil {
+			log.Warnf("failed to warm Planelet manifest cache for integration %s: %v", instance.ID, err)
+			continue
+		}
+		log.Infof("warmed Planelet manifest cache for integration %s", instance.ID)
+	}
 }
 
 func startPublicAPI(

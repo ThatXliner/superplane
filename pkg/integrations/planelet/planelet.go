@@ -225,6 +225,27 @@ func (p *Planelet) ListResources(resourceType string, ctx core.ListResourcesCont
 	return []core.IntegrationResource{}, nil
 }
 
+// WarmCache fetches the manifest for a ready Planelet instance and stores it in
+// the in-memory cache. Configuration() relies on this cache to expose each
+// action's parameter fields. The cache is process-local and empty after a
+// restart, so the server primes it on startup for every ready instance —
+// otherwise the integration catalog would advertise actions without parameters
+// until the user happens to open the action picker (which calls ListResources).
+func WarmCache(integration core.IntegrationContext, httpCtx core.HTTPContext) error {
+	client, err := NewClientWithHTTP(integration, httpCtx)
+	if err != nil {
+		return fmt.Errorf("failed to create Planelet client: %w", err)
+	}
+
+	manifest, err := client.FetchManifest()
+	if err != nil {
+		return fmt.Errorf("failed to fetch manifest: %w", err)
+	}
+
+	setCachedManifest(manifest)
+	return nil
+}
+
 func (p *Planelet) Hooks() []core.Hook {
 	return []core.Hook{}
 }

@@ -129,6 +129,21 @@ func ListIntegrations(orgID uuid.UUID) ([]Integration, error) {
 	return integrations, nil
 }
 
+// ListReadyIntegrationsByAppName returns all ready integrations of a given app
+// across every organization. Used at startup to re-warm in-memory caches that
+// integrations populate during Sync (e.g. the Planelet manifest).
+func ListReadyIntegrationsByAppName(appName string) ([]Integration, error) {
+	var integrations []Integration
+	err := database.Conn().
+		Where("app_name = ? AND state = ?", appName, IntegrationStateReady).
+		Find(&integrations).
+		Error
+	if err != nil {
+		return nil, err
+	}
+	return integrations, nil
+}
+
 func CountIntegrationsByOrganization(orgID string) (int64, error) {
 	return CountIntegrationsByOrganizationInTransaction(database.Conn(), orgID)
 }
