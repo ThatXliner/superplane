@@ -290,6 +290,18 @@ service Organizations {
     };
   }
 
+  rpc RefreshIntegration(RefreshIntegrationRequest) returns (RefreshIntegrationResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/organizations/{id}/integrations/{integration_id}/refresh"
+      body: "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Refresh an integration's manifest";
+      description: "Re-fetches a Planelet integration's manifest and re-warms the catalog";
+      tags: "Organization";
+    };
+  }
+
 }
 
 message Organization {
@@ -464,6 +476,15 @@ message DescribeIntegrationRequest {
 }
 
 message DescribeIntegrationResponse {
+  Integration integration = 1;
+}
+
+message RefreshIntegrationRequest {
+  string id = 1;
+  string integration_id = 2;
+}
+
+message RefreshIntegrationResponse {
   Integration integration = 1;
 }
 
