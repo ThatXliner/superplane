@@ -21,6 +21,8 @@ import {
   validateFieldForSubmission,
 } from "@/lib/components";
 import { useRealtimeValidation } from "@/hooks/useRealtimeValidation";
+import { useRefreshIntegration } from "@/hooks/useIntegrations";
+import { RefreshCw } from "lucide-react";
 import { SimpleTooltip } from "./SimpleTooltip";
 
 interface SettingsTabProps {
@@ -151,6 +153,9 @@ export function SettingsTab({
       validateOnMount: false,
     },
   );
+
+  const refreshIntegration = useRefreshIntegration(domainId ?? "");
+  const isPlanelet = integrationName === "planelet";
 
   // Helper to check if node name has real-time validation error
   const hasNodeNameError = useMemo(() => {
@@ -694,6 +699,22 @@ export function SettingsTab({
           <div
             className={`border-t border-gray-200 dark:border-gray-700 pt-6 space-y-4 ${isReadOnly ? "pointer-events-none opacity-60" : ""}`}
           >
+            {isPlanelet && domainId && selectedIntegration?.id && (
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  disabled={refreshIntegration.isPending || isReadOnly}
+                  onClick={() =>
+                    refreshIntegration.mutate({ integrationId: selectedIntegration.id!, force: true })
+                  }
+                >
+                  <RefreshCw className={`h-4 w-4 ${refreshIntegration.isPending ? "animate-spin" : ""}`} />
+                  <span className="ml-1">Reload actions</span>
+                </Button>
+              </div>
+            )}
             {configurationFields.map((field) => {
               if (!field.name || field.name === "customName") return null;
               const fieldName = field.name;
