@@ -5,9 +5,9 @@ import { MultiCombobox, MultiComboboxLabel } from "@/components/MultiCombobox/mu
 import { Select, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ConfigurationField } from "../../api-client";
-import { useIntegrationResources } from "@/hooks/useIntegrations";
+import { useIntegrationResources, useRefreshIntegration } from "@/hooks/useIntegrations";
 import { toTestId } from "@/lib/testID";
-import { type RefObject, useEffect, useMemo, useState } from "react";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 
 interface IntegrationResourceFieldRendererProps {
   field: ConfigurationField;
@@ -157,6 +157,18 @@ export const IntegrationResourceFieldRenderer = ({
       }
     }
   }, [isMulti, value, field.defaultValue, onChange]);
+
+  // When the action picker opens, fire a non-forced manifest refresh so newly
+  // added Planelet actions appear. The hook's staleness gate prevents spamming.
+  const refreshIntegration = useRefreshIntegration(organizationId ?? "");
+  const autoRefreshedRef = useRef(false);
+  useEffect(() => {
+    if (autoRefreshedRef.current) return;
+    if (resourceType !== "action") return;
+    if (!organizationId || !integrationId) return;
+    autoRefreshedRef.current = true;
+    refreshIntegration.mutate({ integrationId, force: false });
+  }, [resourceType, organizationId, integrationId, refreshIntegration]);
 
   const resourcesUnavailable = !organizationId || !integrationId || isLoadingResources || !!resourcesError;
   const hasResources = Boolean(resources && resources.length > 0);
