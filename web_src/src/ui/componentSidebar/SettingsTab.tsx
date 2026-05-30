@@ -21,6 +21,9 @@ import {
   validateFieldForSubmission,
 } from "@/lib/components";
 import { useRealtimeValidation } from "@/hooks/useRealtimeValidation";
+import { useRefreshIntegration } from "@/hooks/useIntegrations";
+import { RefreshCw } from "lucide-react";
+import { showErrorToast, showSuccessToast } from "@/lib/toast";
 import { SimpleTooltip } from "./SimpleTooltip";
 
 interface SettingsTabProps {
@@ -111,6 +114,7 @@ export function SettingsTab({
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveBaselineSnapshotRef = useRef(buildAutosaveSnapshot(configuration || {}, nodeName, integrationRef));
   const pendingAutosaveSnapshotRef = useRef<string | null>(null);
+  const lastSyncedPropsRef = useRef<string | null>(null);
   // Use autocompleteExampleObj directly - current node is already filtered out
   const resolvedAutocompleteExampleObj = autocompleteExampleObj;
 
@@ -151,6 +155,9 @@ export function SettingsTab({
       validateOnMount: false,
     },
   );
+
+  const refreshIntegration = useRefreshIntegration(domainId ?? "");
+  const isPlanelet = integrationName === "planelet";
 
   // Helper to check if node name has real-time validation error
   const hasNodeNameError = useMemo(() => {
@@ -237,6 +244,15 @@ export function SettingsTab({
 
   // Sync state when props change
   useEffect(() => {
+    // Only resync from props when the node's own props actually change. Derived
+    // schema (configurationFields → defaultValuesWithoutToggles) also changes on a
+    // Planelet manifest refresh; without this guard that would wipe unsaved edits.
+    const propsSignature = buildAutosaveSnapshot(configuration, nodeName, integrationRef);
+    if (lastSyncedPropsRef.current === propsSignature) {
+      return;
+    }
+    lastSyncedPropsRef.current = propsSignature;
+
     let newConfig;
     if (Object.values(configuration).length === 0 || !configuration) {
       newConfig = defaultValuesWithoutToggles;
@@ -252,7 +268,11 @@ export function SettingsTab({
     setSelectedIntegration(integrationRef);
     setValidationErrors(new Set());
     setShowValidation(false);
-  }, [configuration, nodeName, defaultValuesWithoutToggles, filterVisibleFields, integrationRef]);
+    // filterVisibleFields intentionally omitted: it changes when configurationFields
+    // changes (e.g. a Planelet manifest refresh), and we must NOT reset in-progress
+    // edits from props on a schema-only change — only on real config/name/instance changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configuration, nodeName, defaultValuesWithoutToggles, integrationRef]);
 
   // Auto-select the first installation if none is selected or selection is invalid
   useEffect(() => {
@@ -694,6 +714,28 @@ export function SettingsTab({
           <div
             className={`border-t border-gray-200 dark:border-gray-700 pt-6 space-y-4 ${isReadOnly ? "pointer-events-none opacity-60" : ""}`}
           >
+            {isPlanelet && domainId && selectedIntegration?.id && (
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  disabled={refreshIntegration.isPending || isReadOnly}
+                  onClick={() =>
+                    refreshIntegration.mutate(
+                      { integrationId: selectedIntegration.id!, force: true },
+                      {
+                        onSuccess: () => showSuccessToast("Reloaded actions from Planelet server"),
+                        onError: () => showErrorToast("Failed to reload actions. Check the Planelet server."),
+                      },
+                    )
+                  }
+                >
+                  <RefreshCw className={`h-4 w-4 ${refreshIntegration.isPending ? "animate-spin" : ""}`} />
+                  <span className="ml-1">Reload actions</span>
+                </Button>
+              </div>
+            )}
             {configurationFields.map((field) => {
               if (!field.name || field.name === "customName") return null;
               const fieldName = field.name;
