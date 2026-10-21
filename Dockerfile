@@ -1,5 +1,5 @@
 ARG UBUNTU_VERSION=22.04
-ARG GO_VERSION=1.26.2
+ARG GO_VERSION=1.27.3
 ARG PLAYWRIGHT_GO_VERSION=v0.5200.1
 ARG RUNNER_IMAGE="ubuntu:${UBUNTU_VERSION}"
 
@@ -8,7 +8,7 @@ ARG RUNNER_IMAGE="ubuntu:${UBUNTU_VERSION}"
 # Used for local development and testing.
 # ----------------------------------------------------------------------------------------------------------------------
 
-FROM ubuntu:${UBUNTU_VERSION} AS dev-base
+FROM ubuntu:${UBUNTU_VERSION} AS runtime-tools
 
 ARG GO_VERSION
 ARG PLAYWRIGHT_GO_VERSION
@@ -29,8 +29,17 @@ RUN apt-get update && \
   apt-get clean && \
   rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
+RUN bash /opt/install-scripts/update-ca-trust.sh
 RUN bash /opt/install-scripts/install-go.sh "${GO_VERSION}"
 RUN bash /opt/install-scripts/install-nodejs.sh
+
+FROM runtime-tools AS trust-check
+COPY scripts/security /opt/security
+RUN go run /opt/security/check-tls.go && node /opt/security/check-tls.cjs
+
+FROM runtime-tools AS dev-base
+ARG PLAYWRIGHT_GO_VERSION
+
 RUN bash /opt/install-scripts/install-postgresql-client.sh
 RUN bash /opt/install-scripts/install-gomigrate.sh
 RUN bash /opt/install-scripts/install-protoc.sh
@@ -110,6 +119,8 @@ RUN apt-get update && \
   rm -rf /var/lib/apt/lists/*
 
 # Install Node.js for localtunnel.
+COPY scripts/docker/update-ca-trust.sh /tmp/update-ca-trust.sh
+RUN bash /tmp/update-ca-trust.sh && rm /tmp/update-ca-trust.sh
 COPY scripts/docker/install-nodejs.sh /tmp/install-nodejs.sh
 RUN bash /tmp/install-nodejs.sh && rm /tmp/install-nodejs.sh
 
@@ -161,6 +172,10 @@ LABEL org.opencontainers.image.title="superplane" \
 # postgresql-client needs to be installed here too,
 # otherwise the createdb command won't work.
 # Install PostgreSQL 17.5 client tools
+COPY scripts/docker/update-ca-trust.sh /tmp/update-ca-trust.sh
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
+  bash /tmp/update-ca-trust.sh && rm /tmp/update-ca-trust.sh && \
+  rm -rf /var/lib/apt/lists/*
 COPY scripts/docker/install-postgresql-client.sh install-postgresql-client.sh
 RUN bash install-postgresql-client.sh
 

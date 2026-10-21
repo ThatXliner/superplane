@@ -1,21 +1,22 @@
-#!/bin/sh
+#!/usr/bin/env bash
+set -euo pipefail
 
-set -e
-set -o pipefail
+NODE_VERSION=22.23.4
+case "$(dpkg --print-architecture)" in
+  amd64) arch=x64; sha256=1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca76337e9ce ;;
+  arm64) arch=arm64; sha256=6287aa46b6c375d816e63ae66d024fbbfd70404825aabdfdf898a970871d2f4b ;;
+  *) echo 'Unsupported Node.js architecture' >&2; exit 1 ;;
+esac
 
-echo "Installing Node.js 22.x from NodeSource repository"
-
-apt-get update -y
-apt-get install --no-install-recommends -y curl gnupg
-
-mkdir -p /etc/apt/keyrings
-curl --retry 5 --retry-delay 1 --retry-max-time 60 --retry-connrefused -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
-echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" > /etc/apt/sources.list.d/nodesource.list
-
-apt-get update -y
-apt-get install -y nodejs
+apt-get update
+apt-get install --no-install-recommends -y ca-certificates curl xz-utils
+archive="$(mktemp)"
+trap 'rm -f "$archive"' EXIT
+curl --retry 5 --retry-delay 1 --retry-max-time 120 --retry-connrefused -fsSL \
+  "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${arch}.tar.xz" -o "$archive"
+printf '%s  %s\n' "$sha256" "$archive" | sha256sum --check --strict
+tar -xJf "$archive" -C /usr/local --strip-components=1
 apt-get clean
 rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
-
-node -v
-npm -v
+node --version
+npm --version
