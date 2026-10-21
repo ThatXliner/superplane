@@ -1,6 +1,19 @@
 #!/usr/bin/env node
 "use strict";
 
+const [major, minor, patch] = process.versions.node.split(".").map(Number);
+const minimum = { 22: [23, 4], 24: [22, 1], 26: [12, 1] }[major];
+if (
+  !minimum ||
+  minor < minimum[0] ||
+  (minor === minimum[0] && patch < minimum[1])
+) {
+  console.error(
+    "@superplane/cli: use patched Node.js 22.23.4, 24.22.1, or 26.12.1 (or a newer patch in those release lines).",
+  );
+  process.exit(1);
+}
+
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
@@ -24,7 +37,7 @@ function resolveTarget() {
   if (!target) {
     console.error(
       `@superplane/cli: unsupported platform ${key}. ` +
-        `Supported: ${Object.keys(PLATFORM_MAP).join(", ")}.`
+        `Supported: ${Object.keys(PLATFORM_MAP).join(", ")}.`,
     );
     process.exit(1);
   }
@@ -55,7 +68,9 @@ function download(url, dest) {
         }
         const file = fs.createWriteStream(dest);
         res.pipe(file);
-        file.on("finish", () => file.close((err) => (err ? reject(err) : resolve())));
+        file.on("finish", () =>
+          file.close((err) => (err ? reject(err) : resolve())),
+        );
         file.on("error", reject);
       });
       req.on("error", reject);
